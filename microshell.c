@@ -19,17 +19,16 @@ typedef struct s_pipe {
 }       t_pipe;
 
 typedef struct s_pipes {
-    int nb_cmd;
     int nb_pipes;
     t_pipe  *pipe;
 }       t_pipes;
 
 int ft_strlen(char *str){
-int i;
-i=0;
-while(str[i])
-    i++;
-return(i);
+    int i;
+    i=0;
+    while(str[i])
+        i++;
+    return(i);
 }
 
 char *ft_strdup(char *src){
@@ -72,9 +71,9 @@ int ft_nbargs(int i, char **str){
 
 int main(int nargv, char **argv, char **env)
 {
-    int cont;
-    int pipecont;
-    int argu;
+    int     cont;
+    int     pipecont;
+    int     argu;
     t_pipes *pipes;
     int		status;
     int     ret;
