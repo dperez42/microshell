@@ -84,6 +84,7 @@ int main(int nargv, char **argv, char **env)
     cont = 1; //contador principal
     while (cont < nargv){
             pipes = malloc(sizeof (t_pipes));
+            
             pipes->nb_pipes = ft_nbpipes(cont, argv); 
             pipes->pipe = malloc(sizeof (t_pipe) * pipes->nb_pipes);
             pipecont = 0;
@@ -101,11 +102,14 @@ int main(int nargv, char **argv, char **env)
                       cont = cont + 1;
                 pipecont++;
             }
+            
             ///
             pipecont = 0;
-            while(pipecont < pipes->nb_pipes){
+            while(pipecont < pipes->nb_pipes  && pipes->pipe[pipecont].args[0]){
+                
                 if (strcmp("cd", pipes->pipe[pipecont].args[0]) == 0) // SI ES CD
                 {
+                    write(1,"aqui",4);
                     ret = EXIT_SUCCESS;
                     if (pipes->pipe[pipecont].nb_args < 2) //solo cd
                     {
@@ -170,6 +174,6 @@ int main(int nargv, char **argv, char **env)
             free(pipes->pipe);
             free(pipes);
     }
-    system("leaks a.out");
+    //system("leaks a.out");
     return(ret);
 }
