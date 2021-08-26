@@ -1,179 +1,241 @@
-#include <unistd.h>
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   microshell.c                                       :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: dperez-z <dperez-z@student.42.fr>          +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2021/08/26 12:35:09 by dperez-z          #+#    #+#             */
+/*   Updated: 2021/08/26 12:37:01 by dperez-z         ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
 
-#define READ_END    0    /* index pipe extremo lectura */
-#define WRITE_END   1    /* index pipe extremo escritura */
+# include "microshell.h"
 
-
-#define STDIN		0
-#define STDOUT		1
-#define STDERR		2
-
-typedef struct s_pipe {
-    int nb_args;
-    char **args;
-    pid_t pid;
-    int fd[2];
-}       t_pipe;
-
-typedef struct s_pipes {
-    int nb_pipes;
-    t_pipe  *pipe;
-}       t_pipes;
-
-int ft_strlen(char *str){
-    int i;
-    i=0;
-    while(str[i])
-        i++;
-    return(i);
-}
-
-char *ft_strdup(char *src){
-    int i;
-    char *dst;
-
-    if (!src)
-        return(NULL);
-    if (!(dst = malloc((ft_strlen(src)+1))))
-        return(NULL);
-    i = 0;
-    while(src[i]){
-        dst[i]=src[i];
-        i++;
-    }
-    dst[i]=0;
-    return(dst);
-}
-//numero de pipes desde posicion i;
-int ft_nbpipes(int i, char **str){
-    int c;
-    c = 0;
-    while (str[i] && strcmp(str[i],";")){
-        if (!strcmp(str[i],"|"))
-            c++;
-        i++;
-    }
-    return(c+1); //numero de pipes
-}
-//numero de arg en una pipe desde posicion i;
-int ft_nbargs(int i, char **str){
-    int c;
-    c = 0;
-    while (str[i] && strcmp(str[i],"|") && strcmp(str[i],";")){
-        i++;
-        c++;
-    }
-    return(c); //numero de pipes
-}
-
-int main(int nargv, char **argv, char **env)
+void	ft_putstr_fd(char const *str, int fd)
 {
-    int     cont;
-    int     pipecont;
-    int     argu;
-    t_pipes *pipes;
-    int		status;
-    int     ret;
-    int     i;
-    int     j;
+	while (*str)
+		write(fd, str++, 1);
+}
 
-    //PARSING
-    cont = 1; //contador principal
-    while (cont < nargv){
-            pipes = malloc(sizeof (t_pipes));
-            
-            pipes->nb_pipes = ft_nbpipes(cont, argv); 
-            pipes->pipe = malloc(sizeof (t_pipe) * pipes->nb_pipes);
-            pipecont = 0;
-            while (pipecont < pipes->nb_pipes){
-                pipes->pipe[pipecont].nb_args = ft_nbargs(cont,argv);
-                pipes->pipe[pipecont].args = malloc(sizeof (char*) * pipes->pipe[pipecont].nb_args + 1);
-                argu = 0;
-                while (argu < pipes->pipe[pipecont].nb_args ){
-                    pipes->pipe[pipecont].args[argu] = ft_strdup(argv[cont]);
-                    cont++;
-                    argu++;
-                }
-                pipes->pipe[pipecont].args[argu] = 0;
-                //if (cont < nargv)
-                      cont = cont + 1;
-                pipecont++;
-            }
-            
-            ///
-            pipecont = 0;
-            while(pipecont < pipes->nb_pipes  && pipes->pipe[pipecont].args[0]){
-                
-                if (strcmp("cd", pipes->pipe[pipecont].args[0]) == 0) // SI ES CD
-                {
-                    write(1,"aqui",4);
-                    ret = EXIT_SUCCESS;
-                    if (pipes->pipe[pipecont].nb_args < 2) //solo cd
-                    {
-                        write(STDERR, "error: cd: bad arguments\n", ft_strlen("error: cd: bad arguments\n"));
-                        ret = EXIT_FAILURE;
-                    }
-                    else if (chdir(pipes->pipe[pipecont].args[1])) //
-                    {
-                        write(STDERR, "error: cd: cannot change directory to ", ft_strlen("error: cd: cannot change directory to "));
-                        write(STDERR, pipes->pipe[pipecont].args[1], ft_strlen(pipes->pipe[pipecont].args[1]));
-                        write(STDERR, "\n", 1);
-                        ret = EXIT_FAILURE;
-                    }
-                }    
-                else ////PIPES
-                { 
-                            ret = EXIT_FAILURE;
-                            pipe(pipes->pipe[pipecont].fd);
-                            pipes->pipe[pipecont].pid= fork();
-                            if (pipes->pipe[pipecont].pid < 0)
-                            {
-                                write(STDERR, "error: fatal\n", ft_strlen("error: fatal\n"));
-                                exit(EXIT_FAILURE);
-                            }
-                            else if (pipes->pipe[pipecont].pid  == 0) //child
-                            {
-                                close(pipes->pipe[pipecont].fd[READ_END]);
-                                if (pipecont < pipes->nb_pipes-1)
-                                    dup2(pipes->pipe[pipecont].fd[WRITE_END], STDOUT); //vuelca la salida estandar en la entrada del pipe   
-                                if (pipecont > 0)   //si hay un pipe anterior 
-                                    dup2(pipes->pipe[pipecont-1].fd[READ_END], STDIN);    //REDIRIGE LA SALIDA DEL PIPE ANTERIOR (si hay) AL ESTANDAR INPUT        
-                                if ((ret = execve(pipes->pipe[pipecont].args[0], pipes->pipe[pipecont].args, env)) < 0)
-                                {
-                                    write(STDERR, "error: cannot execute ", ft_strlen("error: cannot execute "));
-                                    write(STDERR, pipes->pipe[pipecont].args[0], ft_strlen(pipes->pipe[pipecont].args[0]));
-                                    write(STDERR, "\n", 1);
-                                }
-                                exit(ret);
-                            }
-                            else  //father
-                            {
-                                close(pipes->pipe[pipecont].fd[WRITE_END]); 
-                                waitpid(pipes->pipe[pipecont].pid , &status, 0);  
-                                if (pipecont > 0)
-                                        close(pipes->pipe[pipecont-1].fd[READ_END]);       
-                                if (pipecont == pipes->nb_pipes-1)
-                                        close(pipes->pipe[pipecont].fd[READ_END]);     
-                                if (WIFEXITED(status))
-                                        ret = WEXITSTATUS(status);
-                            }
-                }
-                pipecont++;
-            }
-            j = -1;         //libero la estructura
-            while (++j < pipes->nb_pipes)
-            {
-                i = -1;
-                while(pipes->pipe[j].args[++i])
-                    free(pipes->pipe[j].args[i]);
-                free(pipes->pipe[j].args);
-            }
-            free(pipes->pipe);
-            free(pipes);
-    }
-    //system("leaks a.out");
-    return(ret);
+void	*fatal_ptr(void)
+{
+	ft_putstr_fd("error: fatal\n", STDERR);
+	exit(EXIT_FAILURE);
+	return (NULL);
+}
+
+int		fatal_int(void)
+{
+	ft_putstr_fd("error: fatal\n", STDERR);
+	exit(EXIT_FAILURE);
+	return (EXIT_FAILURE);
+}
+
+size_t	ft_strlen(char const *str)
+{
+	size_t len;
+
+	len = 0;
+	while (*str++)
+		len++;
+	return (len);
+}
+
+void	push_arg(t_cmds *cmds, char *arg)
+{
+	char **temp;
+	int i;
+
+	if (!(temp = (char **)malloc(sizeof(char *) * (cmds->len + 2))))
+		fatal_int();
+	i = -1;
+	while (++i < cmds->len)
+	{
+		temp[i] = cmds->args[i];
+	}
+	temp[i++] = arg;
+	temp[i] = NULL;
+	free(cmds->args);
+	cmds->args = temp;
+	cmds->len++;
+}
+
+t_cmds	*clear_list(t_cmds *cmds)
+{
+	void *tmp;
+
+	while (cmds)
+	{
+		free(cmds->args);
+		cmds->args = NULL;
+		tmp = cmds->next;
+		free(cmds);
+		cmds = tmp;
+	}
+	return (NULL);
+}
+
+t_cmds	*new_cmd_node(void)
+{
+	t_cmds *new;
+
+	if (!(new = (t_cmds *)malloc(sizeof(t_cmds))))
+		return (fatal_ptr());
+	new->next = NULL;
+	new->prev = NULL;
+	new->args = NULL;
+	new->len = 0;
+	new->type = END;
+	return (new);
+}
+
+void	push_front_cmd(t_cmds **cmds_list, char *arg)
+{
+	t_cmds *new;
+
+	new = new_cmd_node();
+	push_arg(new, arg);
+	if (*cmds_list)
+	{
+		(*cmds_list)->next = new;
+		new->prev = *cmds_list;
+	}
+	*cmds_list = new;
+}
+
+void	parse_args(t_cmds **cmds, int ac, char **av)
+{
+	int i;
+	char is_s_colon;
+
+	i = 0;
+	while (++i < ac)
+	{
+		is_s_colon = (strcmp(av[i], ";") == 0);
+		if (is_s_colon && !*cmds)
+			continue;
+		if (!is_s_colon && (!*cmds || (*cmds)->type != END))
+			push_front_cmd(cmds, av[i]);
+		else if (is_s_colon)
+			(*cmds)->type = S_COLON;
+		else if (!strcmp(av[i], "|"))
+			(*cmds)->type = PIPE;
+		else
+			push_arg(*cmds, av[i]);
+	}
+	while (*cmds && (*cmds)->prev)
+		*cmds = (*cmds)->prev;
+}
+
+int		cd(t_cmds *cmds)
+{
+	int ret;
+
+	ret = EXIT_SUCCESS;
+	if (cmds->len != 2)
+	{
+		ft_putstr_fd("error: cd: bad arguments\n", STDERR);
+		ret = EXIT_FAILURE;
+	}
+	else
+	{
+		if ((ret = chdir(cmds->args[1])))
+		{
+			ft_putstr_fd("error: cd: cannot change directory to ", STDERR);
+			ft_putstr_fd(cmds->args[1], STDERR);
+			ft_putstr_fd("\n", STDERR);
+		}
+	}
+	return (ret);
+}
+
+void	run_child_process(t_cmds *cmd, char **env)
+{
+	int ret;
+	
+	ret = EXIT_SUCCESS;
+	if (cmd->type == PIPE)
+	{
+		if (dup2(cmd->fds[1], STDOUT) == -1)
+			fatal_int();
+	}
+	if (cmd->prev && cmd->prev->type == PIPE)
+	{
+		if (dup2(cmd->prev->fds[0], STDIN) == -1)
+			fatal_int();
+	}
+	if ((ret = execve(cmd->args[0], cmd->args, env)) == -1)
+	{
+		ft_putstr_fd("error: cannot execute ", STDERR);
+		ft_putstr_fd(cmd->args[0], STDERR);
+		ft_putstr_fd("\n", STDERR);
+	}
+	exit(ret);
+}
+
+int		single_cmd_exec(t_cmds *cmd, char **env)
+{
+	int ret;
+	pid_t pid;
+	int status;
+	char is_pipe_open;
+
+	ret = EXIT_SUCCESS;
+	is_pipe_open = 0;
+	if (cmd->type == PIPE || (cmd->prev && cmd->prev->type == PIPE))
+	{
+		is_pipe_open = 1;
+		if (pipe(cmd->fds))
+			return (fatal_int());
+	}
+	if ((pid = fork()) == -1)
+		return (fatal_int());
+	if (pid == 0)
+		run_child_process(cmd, env);
+	else
+	{
+		waitpid(pid, &status, 0);
+		if (is_pipe_open)
+		{
+			close(cmd->fds[1]);
+			if (cmd->type != PIPE)
+				close(cmd->fds[0]);
+			if (cmd->prev && cmd->prev->type == PIPE)
+				close(cmd->prev->fds[0]);
+		}
+		if (WIFEXITED(status))
+			ret = WEXITSTATUS(status);
+	}
+	return (ret);
+}
+
+int		cmds_exec(t_cmds *cmds, char **env)
+{
+	int ret;
+
+	ret = EXIT_SUCCESS;
+	while (cmds)
+	{
+		if (!strcmp(cmds->args[0], "cd"))
+			ret = cd(cmds);
+		else
+			ret = single_cmd_exec(cmds, env);
+		cmds = cmds->next;
+	}
+	return (ret);
+}
+
+int		main(int ac, char **av, char **env)
+{
+	t_cmds *cmds;
+	int ret;
+
+	cmds = NULL;
+	ret = EXIT_SUCCESS;
+	parse_args(&cmds, ac, av);
+	ret = cmds_exec(cmds, env);
+	getchar();
+	cmds = clear_list(cmds);
+	return (ret);
 }
